@@ -12,24 +12,16 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ProgressBar;
 import android.widget.FrameLayout;
-import androidx.activity.OnBackPressedCallback;
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
+import android.widget.ProgressBar;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
     private static final String HOME = "https://www.conflingo.com/";
     private WebView webView;
     private ProgressBar progressBar;
-    private ValueCallbackHolder fileCallback;
+    private android.webkit.ValueCallback<Uri[]> fileCallback;
 
-    private interface ValueCallbackHolder {
-        void onReceiveValue(Uri[] uris);
-    }
-
-    @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
+    @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().setStatusBarColor(Color.WHITE);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
@@ -40,24 +32,12 @@ public class MainActivity extends AppCompatActivity {
         progressBar.setMax(100);
         progressBar.setVisibility(View.GONE);
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
-        FrameLayout.LayoutParams progressParams = new FrameLayout.LayoutParams(-1, 6);
-        progressParams.topMargin = 0;
-        root.addView(progressBar, progressParams);
+        root.addView(progressBar, new FrameLayout.LayoutParams(-1, 6));
         setContentView(root);
 
         configureWebView();
-        if (savedInstanceState == null) {
-            webView.loadUrl(HOME);
-        } else {
-            webView.restoreState(savedInstanceState);
-        }
-
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-            @Override public void handleOnBackPressed() {
-                if (webView.canGoBack()) webView.goBack();
-                else finish();
-            }
-        });
+        if (savedInstanceState == null) webView.loadUrl(HOME);
+        else webView.restoreState(savedInstanceState);
     }
 
     private void configureWebView() {
@@ -68,8 +48,6 @@ public class MainActivity extends AppCompatActivity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
-        s.setLoadWithOverviewMode(false);
-        s.setUseWideViewPort(false);
         s.setMediaPlaybackRequiresUserGesture(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setUserAgentString(s.getUserAgentString() + " ConflingoAndroidClient/0.1");
@@ -92,11 +70,10 @@ public class MainActivity extends AppCompatActivity {
                 progressBar.setProgress(newProgress);
                 progressBar.setVisibility(newProgress < 100 ? View.VISIBLE : View.GONE);
             }
-
-            @Override public boolean onShowFileChooser(WebView webView, android.webkit.ValueCallback<Uri[]> callback, FileChooserParams params) {
-                fileCallback = callback::onReceiveValue;
-                Intent intent = params.createIntent();
-                try { startActivityForResult(intent, 1001); } catch (Exception e) { callback.onReceiveValue(null); }
+            @Override public boolean onShowFileChooser(WebView view, android.webkit.ValueCallback<Uri[]> callback, FileChooserParams params) {
+                fileCallback = callback;
+                try { startActivityForResult(params.createIntent(), 1001); }
+                catch (Exception e) { callback.onReceiveValue(null); fileCallback = null; }
                 return true;
             }
         });
@@ -105,11 +82,16 @@ public class MainActivity extends AppCompatActivity {
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 1001 && fileCallback != null) {
-            Uri[] result = resultCode == Activity.RESULT_OK && data != null && data.getData() != null
+            Uri[] result = resultCode == RESULT_OK && data != null && data.getData() != null
                     ? new Uri[]{data.getData()} : null;
             fileCallback.onReceiveValue(result);
             fileCallback = null;
         }
+    }
+
+    @Override public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
     }
 
     @Override protected void onSaveInstanceState(Bundle outState) {
